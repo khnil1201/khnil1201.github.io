@@ -166,7 +166,10 @@
         </div>
     </div>
 
-    <script>
+    <!-- 공식 SDK를 사용하기 위해 모듈 타입으로 변경 -->
+    <script type="module">
+        import { GoogleGenAI } from "https://esm.run/@google/genai";
+
         // --- PWA (Progressive Web App) 동적 설정 ---
         (function initPWA() {
             const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#3b82f6"/><path d="M220 350a50 50 0 1 1-50-50v-150l150-30v180a50 50 0 1 1-50-50v-110l-100 20z" fill="#fff"/></svg>';
@@ -227,23 +230,15 @@
             });
         })();
 
-        // --- 재시도 로직을 포함한 API 호출 함수 ---
-        async function fetchWithRetry(url, options, retries = 5) {
-            const delays = [1000, 2000, 4000, 8000, 16000];
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    return await response.json();
-                } catch (error) {
-                    if (i === retries - 1) throw error;
-                    await new Promise(resolve => setTimeout(resolve, delays[i]));
-                }
-            }
+        // 모듈 내 함수는 전역(window)으로 노출해야 HTML 이벤트 속성(onclick, onsubmit)에서 접근 가능합니다.
+        window.setExample = function(text) {
+            const input = document.getElementById('searchInput');
+            input.value = text;
+            input.focus();
         }
 
-        // --- 검색 처리 함수 ---
-        async function handleSearch(event) {
+        // --- 공식 SDK 기반 검색 처리 함수 ---
+        window.handleSearch = async function(event) {
             event.preventDefault(); 
             
             const query = document.getElementById('searchInput').value.trim();
@@ -253,29 +248,35 @@
             document.getElementById('resultsArea').classList.add('hidden');
             document.getElementById('examplesArea').classList.add('hidden');
 
-            // --- API 설정 (GitHub 배포 시 여기를 수정해야 합니다!) ---
-            // 이곳 미리보기 화면 작동을 위해 코드는 원본을 유지합니다.
-            // GitHub에 올리실 때는 반드시 아래 두 줄을 지우고 이렇게 수정하세요:
-            const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0";
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-            const payload = {
-                contents: [{ parts: [{ text: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.` }] }],
-                tools: [{ google_search: {} }],
-                systemInstruction: {
-                    parts: [{ text: "당신은 클래식 악보 검색 도우미입니다. 구글 검색을 사용해 사용자의 요청과 관련된 imslp.org 웹페이지를 찾으세요. 곡의 정식 명칭, 작곡가, 작품 번호(Opus), 주요 악기 편성 등을 짧고 명확하게 한국어로 요약해 주세요. 마크다운 형식을 사용하여 보기 좋게 작성하세요." }]
-                }
-            };
+            // GitHub 배포 시 아래 빈 문자열 안에 발급받으신 API 키를 입력하세요.
+            const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0"; 
+            
+            // 공식 GoogleGenAI 클라이언트 초기화
+            const ai = new GoogleGenAI({ apiKey: apiKey });
 
             try {
-                const result = await fetchWithRetry(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                // GitHub에 배포하실 때는 모델명을 "gemini-2.5-flash"로 꼭 변경해주세요.
+                const response = await ai.models.generateContent({
+                    model: "gemini-2.5-flash", 
+                    contents: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.`,
+                    config: {
+                        tools: [{ googleSearch: {} }],
+                        systemInstruction: "당신은 클래식 악보 검색 도우미입니다. 구글 검색을 사용해 사용자의 요청과 관련된 imslp.org 웹페이지를 찾으세요. 곡의 정식 명칭, 작곡가, 작품 번호(Opus), 주요 악기 편성 등을 짧고 명확하게 한국어로 요약해 주세요. 마크다운 형식을 사용하여 보기 좋게 작성하세요."
+                    }
                 });
 
-                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                const sources = result.candidates?.[0]?.groundingMetadata?.groundingAttributions?.map(a => ({ uri: a.web?.uri, title: a.web?.title })) || [];
+                const text = response.text;
+                
+                // 공식 SDK 구조에서 구글 검색(Grounding) 링크 추출
+                let sources = [];
+                const metadata = response.candidates?.[0]?.groundingMetadata;
+                if (metadata) {
+                    const chunks = metadata.groundingChunks || metadata.groundingAttributions || [];
+                    sources = chunks.map(chunk => {
+                        const webData = chunk.web || chunk;
+                        return { uri: webData.uri, title: webData.title };
+                    }).filter(s => s.uri);
+                }
 
                 if (!text) throw new Error("결과 생성에 실패했습니다.");
 
@@ -325,12 +326,6 @@
                 document.getElementById('loadingIndicator').classList.add('hidden');
                 document.getElementById('resultsArea').classList.remove('hidden');
             }
-        }
-
-        function setExample(text) {
-            const input = document.getElementById('searchInput');
-            input.value = text;
-            input.focus();
         }
     </script>
 </body>
