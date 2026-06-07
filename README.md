@@ -253,7 +253,7 @@
             document.getElementById('resultsArea').classList.add('hidden');
             document.getElementById('examplesArea').classList.add('hidden');
 
-            const apiKey = ""; 
+            const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0"; 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
             const payload = {
