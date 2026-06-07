@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -124,7 +124,7 @@
 <body>
 
     <div class="search-container">
-        <!-- PWA 설치 버튼 (모바일 및 호환 브라우저에서 표시됨) -->
+        <!-- PWA 설치 버튼 -->
         <div id="installContainer" class="hidden mb-4 text-right">
             <button id="installBtn" class="bg-gray-800 text-white text-sm px-4 py-2 rounded-full font-medium shadow-md hover:bg-gray-700 transition">
                 <i class="fas fa-download mr-2"></i>앱으로 설치하기
@@ -169,11 +169,9 @@
     <script>
         // --- PWA (Progressive Web App) 동적 설정 ---
         (function initPWA() {
-            // 1. 앱 아이콘 (음표 모양의 파란색 둥근 사각형 SVG)
             const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#3b82f6"/><path d="M220 350a50 50 0 1 1-50-50v-150l150-30v180a50 50 0 1 1-50-50v-110l-100 20z" fill="#fff"/></svg>';
             const iconDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconSvg)}`;
 
-            // 2. 동적 Manifest 생성 (192x192 아이콘 추가 및 start_url 수정)
             const manifest = {
                 name: "IMSLP 간편 검색기",
                 short_name: "IMSLP검색",
@@ -190,7 +188,6 @@
             const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
             document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
 
-            // 3. 동적 Service Worker 등록
             const swCode = `
                 self.addEventListener('install', (e) => self.skipWaiting());
                 self.addEventListener('activate', (e) => e.waitUntil(clients.claim()));
@@ -204,10 +201,7 @@
                     .catch(err => console.log('Service Worker 등록 실패:', err));
             }
 
-            // 4. 설치 프롬프트 (앱 다운로드 유도) 로직
             let deferredPrompt;
-            
-            // 모바일 환경일 경우 무조건 설치 버튼을 먼저 보여줌 (수동 안내 대비용)
             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             if (isMobile) {
                 document.getElementById('installContainer').classList.remove('hidden');
@@ -228,13 +222,12 @@
                     }
                     deferredPrompt = null;
                 } else {
-                    // 자동 팝업이 차단된 환경(미리보기 창, 아이폰 등)일 경우 수동 설치 안내
-                    alert("자동 설치가 차단되었거나 지원되지 않는 환경입니다.\n\n[수동으로 홈 화면에 추가하는 방법]\n\n🍎 아이폰 (Safari): 하단 '공유(내보내기)' 아이콘 ➔ '홈 화면에 추가'\n🤖 안드로이드 (Chrome): 우측 상단 '⋮' 메뉴 ➔ '홈 화면에 추가' 또는 '앱 설치'");
+                    alert("자동 설치가 차단되었거나 지원되지 않는 환경입니다.\\n\\n[수동으로 홈 화면에 추가하는 방법]\\n\\n🍎 아이폰 (Safari): 하단 '공유(내보내기)' 아이콘 ➔ '홈 화면에 추가'\\n🤖 안드로이드 (Chrome): 우측 상단 '⋮' 메뉴 ➔ '홈 화면에 추가' 또는 '앱 설치'");
                 }
             });
         })();
 
-        // 재시도 로직을 포함한 API 호출 함수
+        // --- 재시도 로직을 포함한 API 호출 함수 ---
         async function fetchWithRetry(url, options, retries = 5) {
             const delays = [1000, 2000, 4000, 8000, 16000];
             for (let i = 0; i < retries; i++) {
@@ -249,13 +242,13 @@
             }
         }
 
+        // --- 검색 처리 함수 ---
         async function handleSearch(event) {
             event.preventDefault(); 
             
             const query = document.getElementById('searchInput').value.trim();
             if (!query) return;
 
-            // UI 변경: 로딩 보이기, 결과 숨기기
             document.getElementById('loadingIndicator').classList.remove('hidden');
             document.getElementById('resultsArea').classList.add('hidden');
             document.getElementById('examplesArea').classList.add('hidden');
@@ -263,7 +256,6 @@
             const apiKey = ""; 
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-            // 구글 검색(Grounding) 툴을 활용한 시스템 프롬프트 작성
             const payload = {
                 contents: [{ parts: [{ text: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.` }] }],
                 tools: [{ google_search: {} }],
@@ -280,29 +272,28 @@
                 });
 
                 const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                // Grounding 메타데이터에서 실제 검색된 링크들을 추출
                 const sources = result.candidates?.[0]?.groundingMetadata?.groundingAttributions?.map(a => ({ uri: a.web?.uri, title: a.web?.title })) || [];
 
-                if (!text) throw new Error("결과 생성 실패");
+                if (!text) throw new Error("결과 생성에 실패했습니다.");
 
-                // 마크다운 파싱 및 렌더링
+                // 마크다운 렌더링
                 document.getElementById('summaryText').innerHTML = marked.parse(text);
                 
-                // IMSLP 관련 링크만 필터링
+                // IMSLP 관련 링크 필터링
                 const imslpLinks = sources.filter(s => s.uri && s.uri.toLowerCase().includes('imslp.org'));
                 
                 if (imslpLinks.length > 0) {
-                    // 중복 링크 제거
+                    // 중복 제거
                     const uniqueLinks = Array.from(new Map(imslpLinks.map(item => [item.uri, item])).values());
                     
                     const linksHtml = uniqueLinks.map(s => `
                         <a href="${s.uri}" target="_blank" class="flex items-center p-4 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 transition duration-200 mb-3 shadow-sm border border-blue-100">
                             <i class="fas fa-file-pdf text-2xl mr-4 text-red-500"></i>
-                            <div class="truncate text-left">
+                            <div class="truncate text-left" style="width: 100%;">
                                 <p class="font-bold truncate text-sm">${s.title || 'IMSLP 페이지로 이동'}</p>
                                 <p class="text-xs text-blue-500 truncate mt-1">${s.uri}</p>
                             </div>
-                            <i class="fas fa-chevron-right ml-auto"></i>
+                            <i class="fas fa-chevron-right ml-auto pl-2"></i>
                         </a>
                     `).join('');
                     
@@ -312,16 +303,19 @@
                     `;
                 } else {
                     document.getElementById('linksArea').innerHTML = `
-                        <p class="text-gray-500 text-sm p-4 bg-gray-50 rounded-lg border border-gray-200"><i class="fas fa-info-circle mr-2"></i>직접적인 IMSLP 링크를 찾지 못했습니다.</p>
+                        <p class="text-gray-500 text-sm p-4 bg-gray-50 rounded-lg border border-gray-200"><i class="fas fa-info-circle mr-2"></i>직접적인 IMSLP 악보 링크를 찾지 못했습니다. 곡명이 정확한지 확인해주세요.</p>
                     `;
                 }
                 
             } catch (error) {
                 console.error("Search API Error:", error);
                 document.getElementById('summaryText').innerHTML = `
-                    <div class="text-red-500 flex items-center">
+                    <div class="text-red-500 flex items-center p-4 bg-red-50 rounded-lg">
                         <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
-                        <div>검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.</div>
+                        <div>
+                            <strong>검색 중 오류가 발생했습니다.</strong><br>
+                            <span class="text-sm">잠시 후 다시 시도해주세요. (${error.message})</span>
+                        </div>
                     </div>`;
                 document.getElementById('linksArea').innerHTML = '';
             } finally {
