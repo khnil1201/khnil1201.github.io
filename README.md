@@ -254,7 +254,7 @@
             document.getElementById('examplesArea').classList.add('hidden');
 
             const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0"; 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
             const payload = {
                 contents: [{ parts: [{ text: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.` }] }],
