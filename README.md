@@ -112,7 +112,6 @@
             color: #374151;
         }
 
-        /* 요약 결과창 마크다운 스타일 */
         .result-content { text-align: left; line-height: 1.6; font-size: 0.95rem; }
         .result-content h1, .result-content h2, .result-content h3 { font-weight: 700; color: #1f2937; margin-top: 1.5rem; margin-bottom: 0.75rem; }
         .result-content h1 { font-size: 1.25rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
@@ -166,11 +165,9 @@
         </div>
     </div>
 
-    <!-- 공식 SDK를 사용하기 위해 모듈 타입으로 변경 -->
-    <script type="module">
-        import { GoogleGenAI } from "https://esm.run/@google/genai";
-
-        // --- PWA (Progressive Web App) 동적 설정 ---
+    <!-- 순수 바닐라 JS (Fetch API) 방식으로 복귀 -->
+    <script>
+        // --- PWA 동적 설정 ---
         (function initPWA() {
             const iconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="100" fill="#3b82f6"/><path d="M220 350a50 50 0 1 1-50-50v-150l150-30v180a50 50 0 1 1-50-50v-110l-100 20z" fill="#fff"/></svg>';
             const iconDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconSvg)}`;
@@ -200,8 +197,7 @@
             `;
             const swBlob = new Blob([swCode], { type: 'application/javascript' });
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register(URL.createObjectURL(swBlob))
-                    .catch(err => console.log('Service Worker 등록 실패:', err));
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
             }
 
             let deferredPrompt;
@@ -230,15 +226,13 @@
             });
         })();
 
-        // 모듈 내 함수는 전역(window)으로 노출해야 HTML 이벤트 속성(onclick, onsubmit)에서 접근 가능합니다.
-        window.setExample = function(text) {
+        function setExample(text) {
             const input = document.getElementById('searchInput');
             input.value = text;
             input.focus();
         }
 
-        // --- 공식 SDK 기반 검색 처리 함수 ---
-        window.handleSearch = async function(event) {
+        async function handleSearch(event) {
             event.preventDefault(); 
             
             const query = document.getElementById('searchInput').value.trim();
@@ -248,37 +242,42 @@
             document.getElementById('resultsArea').classList.add('hidden');
             document.getElementById('examplesArea').classList.add('hidden');
 
-            // GitHub 배포 시 아래 빈 문자열 안에 발급받으신 API 키를 입력하세요.
+            // ★ GitHub 배포 시 아래 빈 문자열 "" 안에 본인의 API 키를 넣으세요!
+            // 예시: const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0";
             const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0"; 
             
-            // 공식 GoogleGenAI 클라이언트 초기화
-            const ai = new GoogleGenAI({ apiKey: apiKey });
+            // ★ 마법의 자동 모델 전환: 키가 없으면 미리보기용 모델, 키가 있으면 실서비스용 모델 사용
+            const modelName = apiKey === "" ? "gemini-2.5-flash-preview-09-2025" : "gemini-1.5-flash";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.` }] }],
+                tools: [{ google_search: {} }], // REST API 형식에 맞춘 스네이크 케이스
+                systemInstruction: {
+                    parts: [{ text: "당신은 클래식 악보 검색 도우미입니다. 구글 검색을 사용해 사용자의 요청과 관련된 imslp.org 웹페이지를 찾으세요. 곡의 정식 명칭, 작곡가, 작품 번호(Opus), 주요 악기 편성 등을 짧고 명확하게 한국어로 요약해 주세요. 마크다운 형식을 사용하여 보기 좋게 작성하세요." }]
+                }
+            };
 
             try {
-                // GitHub에 배포하실 때는 모델명을 "gemini-2.5-flash"로 꼭 변경해주세요.
-                const response = await ai.models.generateContent({
-                    model: "gemini-2.5-flash", 
-                    contents: `"${query}" 클래식 악보에 대한 정보를 IMSLP에서 찾아서 요약해줘.`,
-                    config: {
-                        tools: [{ googleSearch: {} }],
-                        systemInstruction: "당신은 클래식 악보 검색 도우미입니다. 구글 검색을 사용해 사용자의 요청과 관련된 imslp.org 웹페이지를 찾으세요. 곡의 정식 명칭, 작곡가, 작품 번호(Opus), 주요 악기 편성 등을 짧고 명확하게 한국어로 요약해 주세요. 마크다운 형식을 사용하여 보기 좋게 작성하세요."
-                    }
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
 
-                const text = response.text;
-                
-                // 공식 SDK 구조에서 구글 검색(Grounding) 링크 추출
-                let sources = [];
-                const metadata = response.candidates?.[0]?.groundingMetadata;
-                if (metadata) {
-                    const chunks = metadata.groundingChunks || metadata.groundingAttributions || [];
-                    sources = chunks.map(chunk => {
-                        const webData = chunk.web || chunk;
-                        return { uri: webData.uri, title: webData.title };
-                    }).filter(s => s.uri);
+                // 에러 발생 시 구글 서버가 보내주는 정확한 에러 메시지 추출
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || `HTTP 에러 ${response.status}`);
                 }
 
-                if (!text) throw new Error("결과 생성에 실패했습니다.");
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                // 검색(Grounding) 링크 추출
+                const sources = result.candidates?.[0]?.groundingMetadata?.groundingAttributions?.map(a => ({ uri: a.web?.uri, title: a.web?.title })) || [];
+
+                if (!text) throw new Error("결과 텍스트를 생성하지 못했습니다.");
 
                 // 마크다운 렌더링
                 document.getElementById('summaryText').innerHTML = marked.parse(text);
@@ -313,12 +312,13 @@
                 
             } catch (error) {
                 console.error("Search API Error:", error);
+                // 화면에 상세 에러 메시지 표시
                 document.getElementById('summaryText').innerHTML = `
                     <div class="text-red-500 flex items-center p-4 bg-red-50 rounded-lg">
                         <i class="fas fa-exclamation-triangle text-2xl mr-3"></i>
                         <div>
-                            <strong>검색 중 오류가 발생했습니다.</strong><br>
-                            <span class="text-sm">잠시 후 다시 시도해주세요. (${error.message})</span>
+                            <strong class="block mb-1">API 연결 중 오류가 발생했습니다.</strong>
+                            <span class="text-sm font-mono bg-red-100 px-2 py-1 rounded text-red-700 break-all">${error.message}</span>
                         </div>
                     </div>`;
                 document.getElementById('linksArea').innerHTML = '';
