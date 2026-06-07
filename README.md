@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -253,7 +253,10 @@
             document.getElementById('resultsArea').classList.add('hidden');
             document.getElementById('examplesArea').classList.add('hidden');
 
-            const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0"; 
+            // --- API 설정 (GitHub 배포 시 여기를 수정해야 합니다!) ---
+            // 이곳 미리보기 화면 작동을 위해 코드는 원본을 유지합니다.
+            // GitHub에 올리실 때는 반드시 아래 두 줄을 지우고 이렇게 수정하세요:
+            const apiKey = "AIzaSyCQAkd48nnhtjtX-AWqF1Z406d5HIe0Sl0";
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
             const payload = {
